@@ -4,6 +4,7 @@ resource "helm_release" "argocd" {
   create_namespace = true
 
   repository = "https://argoproj.github.io/argo-helm"
+  #repository = "argo" # For Local Repo/Machine
   chart      = "argo-cd"
   version    = "8.2.5"
 
