@@ -1,0 +1,92 @@
+name: Terraform Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "destroy" to confirm infrastructure destruction'
+        required: true
+        default: ''
+      target:
+        description: 'Specific resource to destroy (optional)'
+        required: false
+        default: ''
+
+env:
+  TF_VERSION: '1.5.0'
+
+jobs:
+  terraform-destroy:
+    name: Terraform Destroy
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      
+    environment:
+      name: production
+      
+    steps:
+    - name: Validate Destroy Confirmation
+      run: |
+        if [ "${{ github.event.inputs.confirm_destroy }}" != "destroy" ]; then
+          echo "❌ Destruction cancelled. You must type 'destroy' to confirm."
+          exit 1
+        fi
+        echo "⚠️ Proceeding with infrastructure destruction..."
+        
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+        
+    - name: Terraform Init
+      id: init
+      run: terraform init
+      env:
+        KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        
+    - name: Setup Kubernetes Config
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBE_CONFIG_DATA }}" | base64 -d > ~/.kube/config
+        chmod 600 ~/.kube/config
+        
+    - name: Terraform Plan Destroy
+      id: plan
+      run: |
+        if [ -n "${{ github.event.inputs.target }}" ]; then
+          terraform plan -destroy -target="${{ github.event.inputs.target }}" -no-color -input=false -out=destroy-plan
+        else
+          terraform plan -destroy -no-color -input=false -out=destroy-plan
+        fi
+      env:
+        KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        
+    - name: Terraform Destroy
+      id: destroy
+      run: terraform apply -auto-approve destroy-plan
+      env:
+        KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        
+    - name: Create Destruction Summary
+      run: |
+        echo "## Terraform Destruction Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Status: 🗑️ Successfully Destroyed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Trigger:** Manual (workflow_dispatch)" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Actor:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -n "${{ github.event.inputs.target }}" ]; then
+          echo "**Target:** ${{ github.event.inputs.target }}" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Scope:** All infrastructure" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "⚠️ **Warning:** Infrastructure has been destroyed and is no longer available." >> $GITHUB_STEP_SUMMARY

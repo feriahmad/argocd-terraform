@@ -1,0 +1,10 @@
+# Copy this file to terraform.tfvars and update the values
+
+# Path to your kubeconfig file
+# Default: "~/.kube/config"
+kubeconfig_path = "~/.kube/config"
+
+# Alternative examples:
+# kubeconfig_path = "/Users/username/.kube/config"
+# kubeconfig_path = "/home/username/.kube/config"
+# kubeconfig_path = "./kubeconfig"
